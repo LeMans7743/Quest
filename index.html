@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>消防點名系統 Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .status-btn { 
+            font-size: 11px; 
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 34px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            background-color: white;
+            color: #94a3b8;
+            transition: all 0.1s ease;
+        }
+        .active-present { background-color: #22c55e !important; color: white !important; border-color: #16a34a !important; }
+        .active-duty { background-color: #3b82f6 !important; color: white !important; border-color: #2563eb !important; }
+        .active-leave { background-color: #ef4444 !important; color: white !important; border-color: #dc2626 !important; }
+        .active-scatter { background-color: #eab308 !important; color: white !important; border-color: #ca8a04 !important; }
+        .active-stay { background-color: #f97316 !important; color: white !important; border-color: #ea580c !important; }
+        .active-training { background-color: #a855f7 !important; color: white !important; border-color: #9333ea !important; }
+        .active-mission { background-color: #06b6d4 !important; color: white !important; border-color: #0891b2 !important; }
+        
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: bold;
+            display: none;
+            z-index: 1000;
+        }
+
+        .input-chip {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+            margin-right: 4px;
+            margin-bottom: 4px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-slate-800 pb-10">
+
+    <div id="app" class="max-w-xl mx-auto min-h-screen flex flex-col">
+        <!-- 導航 -->
+        <nav class="bg-white border-b border-gray-200 flex sticky top-0 z-40 shadow-sm">
+            <button onclick="switchTab('report')" id="tab-report" class="flex-1 py-4 text-sm font-black transition-all border-b-4 border-blue-600 text-blue-600 bg-blue-50/20">
+                點名回報
+            </button>
+            <button onclick="switchTab('manage')" id="tab-manage" class="flex-1 py-4 text-sm font-black transition-all border-b-4 border-transparent text-gray-400">
+                名單管理
+            </button>
+        </nav>
+
+        <main class="p-3 flex-1 space-y-4">
+            <div id="page-report" class="space-y-4">
+                
+                <!-- 控制面板 -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] text-gray-400 font-bold uppercase">日期</span>
+                            <input type="text" id="reportDate" class="border-none outline-none font-black py-1 w-20 text-blue-600 text-lg bg-transparent" oninput="updateReport()">
+                        </div>
+                        <div class="flex bg-gray-100 p-1 rounded-lg gap-1">
+                            <button onclick="setTimeSlot('早點名')" id="ts-早點名" class="ts-btn px-3 py-1.5 rounded-md text-xs font-bold text-gray-500">早</button>
+                            <button onclick="setTimeSlot('午點名')" id="ts-午點名" class="ts-btn px-3 py-1.5 rounded-md text-xs font-bold text-gray-500">午</button>
+                            <button onclick="setTimeSlot('晚點名')" id="ts-晚點名" class="ts-btn px-3 py-1.5 rounded-md text-xs font-bold bg-white shadow-sm text-blue-600">晚</button>
+                        </div>
+                    </div>
+                    <button onclick="resetToPresent()" class="w-full py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-lg text-xs font-bold flex items-center justify-center gap-2 active:bg-red-100">
+                        🔄 重製為「全部實到」
+                    </button>
+                </div>
+
+                <!-- 人員名單 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="bg-gray-50 px-4 py-2 text-[10px] font-black text-gray-400 border-b flex justify-between">
+                        <span>姓名</span>
+                        <span>實 / 值 / 休 / 散 / 宿 / 訓 / 差</span>
+                    </div>
+                    <div id="memberList" class="divide-y divide-gray-100">
+                        <!-- JS 載入 -->
+                    </div>
+                </div>
+
+                <!-- 預覽區 -->
+                <div class="bg-slate-900 rounded-2xl p-5 shadow-xl">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-[10px] text-slate-400 font-black tracking-widest uppercase">LINE 回報預覽</span>
+                        <span id="presentCountLabel" class="text-xs text-green-400 font-bold"></span>
+                    </div>
+                    <textarea id="reportPreview" readonly class="w-full h-72 bg-transparent border-none text-slate-100 text-sm leading-relaxed resize-none outline-none font-mono mb-4"></textarea>
+                    <button onclick="copyToClipboard()" class="w-full py-4 bg-blue-600 text-white rounded-xl font-black text-lg shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                        📋 複製報告內容
+                    </button>
+                </div>
+            </div>
+
+            <!-- 名單管理 -->
+            <div id="page-manage" class="hidden bg-white rounded-xl p-5 border border-gray-200">
+                <h2 class="text-lg font-black mb-1">編輯隊員名單</h2>
+                <p class="text-[10px] text-gray-400 mb-3">使用「、」或換行區隔。</p>
+                <textarea id="rawNames" class="w-full h-80 p-4 border border-gray-200 rounded-xl outline-none text-base font-bold mb-4 shadow-inner"></textarea>
+                <button onclick="saveNewList()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black shadow-lg">更新並儲存名單</button>
+            </div>
+        </main>
+
+        <textarea id="hiddenCopyText" style="position: absolute; left: -9999px; opacity: 0;"></textarea>
+        <div id="toast" class="toast">✓ 報告已複製</div>
+    </div>
+
+    <script>
+        // 設定今日日期
+        const today = new Date();
+        const dateInputStr = `${today.getMonth() + 1}/${today.getDate()}`;
+
+        let members = [];
+        let timeSlotStr = '晚點名';
+        let trainingHistory = []; 
+        let missionHistory = []; 
+
+        const defaultNames = ["陳修德", "郭亮彣", "陳育晟", "徐崑洧", "陳冠堯", "廖晨洋", "王崇諺", "張榕峻", "張廷緯", "蔡泓佑", "楊柏均", "徐文聰", "張巧妮", "陳韋君", "張皓淳", "李佾澄", "林家豪", "黃啓峰", "李芃葦", "孫子睿", "黃正安", "陳箴", "謝竣荏", "黃大誠", "張容瑄", "林祐成", "蕭承祐"];
+
+        function initApp() {
+            document.getElementById('reportDate').value = dateInputStr;
+            const savedNames = localStorage.getItem('fire_members_list_v3');
+            const namesToUse = savedNames ? JSON.parse(savedNames) : defaultNames;
+
+            members = namesToUse.map(name => ({
+                name,
+                status: 'present',
+                tName: '', tTime: '',
+                mName: ''
+            }));
+
+            // 預設常見狀態初始化 (模擬 3/30 數據)
+            members.forEach(m => {
+                if (["楊柏均", "王崇諺"].includes(m.name)) { m.status = 'training'; m.tName = '航校士高班'; m.tTime = '115.03.09-115.06.12'; }
+                else if (m.name === "孫子睿") { m.status = 'training'; m.tName = '大車訓'; m.tTime = '115.03.23-115.05.01'; }
+                else if (["陳修德", "徐崑洧", "蔡泓佑", "張榕峻", "張皓淳", "黃啓峰", "謝竣荏", "黃大誠", "黃正安"].includes(m.name)) m.status = 'leave';
+                else if (["張廷緯", "李佾澄", "林家豪"].includes(m.name)) m.status = 'scatter';
+                else if (["郭亮彣", "徐文聰"].includes(m.name)) m.status = 'stay';
+                else if (["陳育晟", "廖晨洋", "陳冠堯", "張巧妮", "陳韋君", "李芃葦", "陳箴", "張容瑄"].includes(m.name)) m.status = 'duty';
+            });
+
+            document.getElementById('rawNames').value = namesToUse.join('、');
+            refreshUI();
+        }
+
+        function resetToPresent() {
+            members.forEach(m => { m.status = 'present'; });
+            refreshUI();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function switchTab(tab) {
+            document.getElementById('page-report').classList.toggle('hidden', tab !== 'report');
+            document.getElementById('page-manage').classList.toggle('hidden', tab !== 'manage');
+            document.getElementById('tab-report').className = tab === 'report' ? 'flex-1 py-4 text-sm font-black border-b-4 border-blue-600 text-blue-600 bg-blue-50/20' : 'flex-1 py-4 text-sm font-black border-b-4 border-transparent text-gray-400';
+            document.getElementById('tab-manage').className = tab === 'manage' ? 'flex-1 py-4 text-sm font-black border-b-4 border-blue-600 text-blue-600 bg-blue-50/20' : 'flex-1 py-4 text-sm font-black border-b-4 border-transparent text-gray-400';
+        }
+
+        function setTimeSlot(val) {
+            timeSlotStr = val;
+            document.querySelectorAll('.ts-btn').forEach(b => b.className = 'ts-btn px-3 py-1.5 rounded-md text-xs font-bold text-gray-500');
+            document.getElementById('ts-' + val).className = 'ts-btn px-3 py-1.5 rounded-md text-xs font-bold bg-white shadow-sm text-blue-600';
+            updateReport();
+        }
+
+        function updateHistory() {
+            const tSet = new Set();
+            const mSet = new Set();
+            trainingHistory = [];
+            missionHistory = [];
+            members.forEach(m => {
+                if(m.status === 'training' && m.tName) {
+                    const key = `${m.tName}||${m.tTime}`;
+                    if(!tSet.has(key)) { tSet.add(key); trainingHistory.push({n: m.tName, t: m.tTime}); }
+                }
+                if(m.status === 'mission' && m.mName) {
+                    if(!mSet.has(m.mName)) { mSet.add(m.mName); missionHistory.push(m.mName); }
+                }
+            });
+        }
+
+        function setMemberStatus(idx, stat) {
+            members[idx].status = stat;
+            if(stat === 'training' && !members[idx].tName && trainingHistory.length > 0) {
+                members[idx].tName = trainingHistory[0].n;
+                members[idx].tTime = trainingHistory[0].t;
+            }
+            if(stat === 'mission' && !members[idx].mName && missionHistory.length > 0) {
+                members[idx].mName = missionHistory[0];
+            }
+            refreshUI();
+        }
+
+        function applyT(idx, n, t) { members[idx].tName = n; members[idx].tTime = t; refreshUI(); }
+        function applyM(idx, n) { members[idx].mName = n; refreshUI(); }
+
+        function refreshUI() {
+            updateHistory();
+            const container = document.getElementById('memberList');
+            container.innerHTML = '';
+            
+            members.forEach((m, idx) => {
+                const item = document.createElement('div');
+                item.className = `p-3 flex flex-col gap-2 ${m.status !== 'present' ? 'bg-slate-50' : ''}`;
+                
+                let extraUI = '';
+                if(m.status === 'training') {
+                    extraUI = `
+                        <div class="mt-1 p-3 bg-purple-50 rounded-xl border border-purple-100 flex flex-col gap-2">
+                            <div class="flex flex-wrap">${trainingHistory.map(h => `<span onclick="applyT(${idx},'${h.n}','${h.t}')" class="input-chip bg-white border-purple-200 text-purple-600">${h.n}</span>`).join('')}</div>
+                            <input type="text" placeholder="受訓名稱" value="${m.tName}" oninput="members[${idx}].tName=this.value;updateReport();" class="text-xs font-bold p-1 bg-white border border-purple-200 rounded outline-none">
+                            <input type="text" placeholder="日期時間" value="${m.tTime}" oninput="members[${idx}].tTime=this.value;updateReport();" class="text-xs font-bold p-1 bg-white border border-purple-200 rounded outline-none">
+                        </div>
+                    `;
+                } else if(m.status === 'mission') {
+                    extraUI = `
+                        <div class="mt-1 p-3 bg-cyan-50 rounded-xl border border-cyan-100 flex flex-col gap-2">
+                            <div class="flex flex-wrap">${missionHistory.map(h => `<span onclick="applyM(${idx},'${h}')" class="input-chip bg-white border-cyan-200 text-cyan-600">${h}</span>`).join('')}</div>
+                            <input type="text" placeholder="公差名稱 (如: 招募、擦槍)" value="${m.mName}" oninput="members[${idx}].mName=this.value;updateReport();" class="text-xs font-bold p-1 bg-white border border-cyan-200 rounded outline-none focus:border-cyan-500">
+                        </div>
+                    `;
+                }
+
+                item.innerHTML = `
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-bold text-slate-700 w-12 text-sm shrink-0">${m.name}</span>
+                        <div class="grid grid-cols-7 gap-1 flex-1">
+                            <button onclick="setMemberStatus(${idx},'present')" class="status-btn ${m.status==='present'?'active-present':''}">實</button>
+                            <button onclick="setMemberStatus(${idx},'duty')" class="status-btn ${m.status==='duty'?'active-duty':''}">值</button>
+                            <button onclick="setMemberStatus(${idx},'leave')" class="status-btn ${m.status==='leave'?'active-leave':''}">休</button>
+                            <button onclick="setMemberStatus(${idx},'scatter')" class="status-btn ${m.status==='scatter'?'active-scatter':''}">散</button>
+                            <button onclick="setMemberStatus(${idx},'stay')" class="status-btn ${m.status==='stay'?'active-stay':''}">宿</button>
+                            <button onclick="setMemberStatus(${idx},'training')" class="status-btn ${m.status==='training'?'active-training':''}">訓</button>
+                            <button onclick="setMemberStatus(${idx},'mission')" class="status-btn ${m.status==='mission'?'active-mission':''}">差</button>
+                        </div>
+                    </div>
+                    ${extraUI}
+                `;
+                container.appendChild(item);
+            });
+            updateReport();
+        }
+
+        function updateReport() {
+            const date = document.getElementById('reportDate').value;
+            const formatArr = (arr) => arr.map(m => m.name).join('、');
+
+            // 分組邏輯
+            const tGroups = {};
+            const mGroups = {};
+            members.forEach(m => {
+                if(m.status === 'training') {
+                    const key = `${m.tName.trim()}||${m.tTime.trim()}`;
+                    if(!tGroups[key]) tGroups[key] = [];
+                    tGroups[key].push(m);
+                } else if(m.status === 'mission') {
+                    const key = m.mName.trim() || '公差';
+                    if(!mGroups[key]) mGroups[key] = [];
+                    mGroups[key].push(m);
+                }
+            });
+
+            let r = `${date}消防分隊報告(${timeSlotStr}情況)：\n`;
+            r += `應到：${members.length}員\n`;
+            
+            // 公差項目 (應到下方依序獨立欄位)
+            Object.keys(mGroups).forEach(key => {
+                r += `${key}：${mGroups[key].length}員（${formatArr(mGroups[key])}）\n`;
+            });
+
+            // 受訓項目
+            Object.keys(tGroups).forEach(key => {
+                const [n, t] = key.split('||');
+                if(n || t) r += `${n || '受訓'}：${tGroups[key].length}員（${formatArr(tGroups[key])}${t}）\n`;
+            });
+
+            const cats = [{id:'leave',l:'休假'},{id:'scatter',l:'外散'},{id:'stay',l:'外宿'},{id:'duty',l:'值班'}];
+            cats.forEach(c => {
+                const list = members.filter(m => m.status === c.id);
+                if(list.length > 0) r += `${c.l}：${list.length}員（${formatArr(list)}）\n`;
+            });
+
+            const p = members.filter(m => m.status === 'present');
+            r += `實到：${p.length}員（${formatArr(p)}）\n\n`;
+            r += `（人員不參加統一點名，於消防分隊實施）`;
+
+            document.getElementById('reportPreview').value = r;
+            document.getElementById('hiddenCopyText').value = r;
+            document.getElementById('presentCountLabel').innerText = `實到: ${p.length} 員`;
+        }
+
+        function copyToClipboard() {
+            const area = document.getElementById('hiddenCopyText');
+            area.select();
+            area.setSelectionRange(0, 9999);
+            document.execCommand('copy');
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 1500);
+        }
+
+        function saveNewList() {
+            const raw = document.getElementById('rawNames').value;
+            const list = raw.split(/[、,\s\n]+/).filter(n => n.trim() !== "");
+            if(list.length > 0) {
+                localStorage.setItem('fire_members_list_v3', JSON.stringify(list));
+                initApp();
+                switchTab('report');
+                window.scrollTo(0,0);
+            }
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
+
